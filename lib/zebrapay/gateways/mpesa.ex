@@ -120,7 +120,7 @@ defmodule ZebraPay.Gateways.Mpesa do
 
   use ZebraPay.Gateway
 
-  alias ZebraPay.{Response, Utils}
+  alias ZebraPay.{Response, TokenCache, Utils}
 
   # Party identifier types, per Daraja docs
   @identifier_shortcode "4"
@@ -579,17 +579,41 @@ defmodule ZebraPay.Gateways.Mpesa do
   # ── Private helpers ────────────────────────────────────────────────────────
 
   defp get_access_token(base) do
+    case TokenCache.get(gateway_name()) do
+      {:ok, token} -> {:ok, token}
+      :miss -> fetch_access_token(base)
+    end
+  end
+
+  defp fetch_access_token(base) do
     url = "#{base}/oauth/v1/generate?grant_type=client_credentials"
     key = config(:consumer_key)
     secret = config(:consumer_secret)
     credentials = Base.encode64("#{key}:#{secret}")
 
     case HTTP.get(url, headers: [{"Authorization", "Basic #{credentials}"}]) do
-      {:ok, %{"access_token" => token}} -> {:ok, token}
-      {:ok, body} -> {:error, "Token error: #{inspect(body)}"}
-      {:error, reason} -> {:error, reason}
+      {:ok, %{"access_token" => token} = body} ->
+        TokenCache.put(gateway_name(), token, expires_in: token_expires_in(body))
+        {:ok, token}
+
+      {:ok, body} ->
+        {:error, "Token error: #{inspect(body)}"}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
+
+  # Daraja returns "expires_in" as a numeric string, e.g. "3599"
+  defp token_expires_in(%{"expires_in" => value}) when is_binary(value) do
+    case Integer.parse(value) do
+      {seconds, _} -> seconds
+      :error -> 3600
+    end
+  end
+
+  defp token_expires_in(%{"expires_in" => value}) when is_integer(value), do: value
+  defp token_expires_in(_body), do: 3600
 
   defp build_stk_push_body(params) do
     with {:ok, timestamp, password} <- generate_password() do

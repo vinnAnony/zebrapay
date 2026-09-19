@@ -1,11 +1,19 @@
 defmodule ZebraPay.Gateways.MpesaTest do
-  use ExUnit.Case, async: true
+  # ZebraPay.TokenCache is a single global ETS table keyed by gateway name,
+  # so it can't safely be shared across concurrently-running tests: async
+  # tests would race to cache/clear the same :mpesa token, causing
+  # Bypass's oauth expectation to go unmet in whichever test loses the race.
+  use ExUnit.Case, async: false
 
   alias ZebraPay.Gateways.Mpesa
   alias ZebraPay.Response
 
   # We use Bypass to simulate the Safaricom API locally in tests
   setup do
+    # Ensure every test starts with a cache miss, forcing a real (mocked)
+    # oauth call instead of reusing a token cached by a previous test.
+    ZebraPay.TokenCache.clear(:mpesa)
+
     bypass = Bypass.open()
 
     Application.put_env(:zebrapay, :sandbox, true)
@@ -123,6 +131,117 @@ defmodule ZebraPay.Gateways.MpesaTest do
                Mpesa.initiate_payment(params)
 
       assert message =~ "base_url"
+    end
+  end
+
+  describe "query_status/1" do
+    test "resolves base_url, fetches a token, and returns success when the STK push completed",
+         %{bypass: bypass} do
+      Bypass.expect_once(bypass, "GET", "/oauth/v1/generate", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{"access_token" => "test_token", "expires_in" => "3599"})
+        )
+      end)
+
+      Bypass.expect_once(bypass, "POST", "/mpesa/stkpushquery/v1/query", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        decoded = Jason.decode!(body)
+
+        assert decoded["BusinessShortCode"] == "174379"
+        assert decoded["CheckoutRequestID"] == "ws_CO_191220191020363925"
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{
+            "ResponseCode" => "0",
+            "ResponseDescription" => "The service request has been accepted successfully",
+            "MerchantRequestID" => "29115-34620561-1",
+            "CheckoutRequestID" => "ws_CO_191220191020363925",
+            "ResultCode" => "0",
+            "ResultDesc" => "The service request is processed successfully."
+          })
+        )
+      end)
+
+      assert {:ok, %Response{status: :success, gateway: :mpesa} = resp} =
+               Mpesa.query_status("ws_CO_191220191020363925")
+
+      assert resp.transaction_id == "ws_CO_191220191020363925"
+    end
+
+    test "returns a failed response when the STK push was cancelled/failed", %{bypass: bypass} do
+      Bypass.expect_once(bypass, "GET", "/oauth/v1/generate", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{"access_token" => "test_token", "expires_in" => "3599"})
+        )
+      end)
+
+      Bypass.expect_once(bypass, "POST", "/mpesa/stkpushquery/v1/query", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{
+            "ResultCode" => "1032",
+            "ResultDesc" => "Request cancelled by user."
+          })
+        )
+      end)
+
+      assert {:ok, %Response{status: :failed, gateway: :mpesa} = resp} =
+               Mpesa.query_status("ws_CO_191220191020363925")
+
+      assert resp.message == "Request cancelled by user."
+    end
+  end
+
+  describe "payout/1 (B2C)" do
+    test "resolves base_url, fetches a token, RSA-encrypts the SecurityCredential, and returns pending on success",
+         %{bypass: bypass} do
+      Bypass.expect_once(bypass, "GET", "/oauth/v1/generate", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{"access_token" => "test_token", "expires_in" => "3599"})
+        )
+      end)
+
+      Bypass.expect_once(bypass, "POST", "/mpesa/b2c/v3/paymentrequest", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        decoded = Jason.decode!(body)
+
+        assert decoded["CommandID"] == "BusinessPayment"
+        assert decoded["PartyA"] == "174379"
+        assert decoded["PartyB"] == "254712345678"
+        assert decoded["InitiatorName"] == "testapi"
+        assert is_binary(decoded["SecurityCredential"]) and decoded["SecurityCredential"] != ""
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{
+            "OriginatorConversationID" => "29112-34801843-1",
+            "ConversationID" => "AG_20191219_00005797af5d7d75f652",
+            "ResponseCode" => "0",
+            "ResponseDescription" => "Accept the service request successfully."
+          })
+        )
+      end)
+
+      params = %{phone: "254712345678", amount: 500, occasion: "Refund", remarks: "Order refund"}
+
+      assert {:ok, %Response{status: :pending, gateway: :mpesa} = resp} = Mpesa.payout(params)
+      assert resp.transaction_id == "AG_20191219_00005797af5d7d75f652"
     end
   end
 
@@ -265,6 +384,48 @@ defmodule ZebraPay.Gateways.MpesaTest do
       assert {:error, %Response{status: :error, gateway: :mpesa}} =
                Mpesa.business_payment(%{amount: 100})
     end
+
+    test "resolves base_url, fetches a token, RSA-encrypts the SecurityCredential, and returns pending on success",
+         %{bypass: bypass} do
+      Bypass.expect_once(bypass, "GET", "/oauth/v1/generate", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{"access_token" => "test_token", "expires_in" => "3599"})
+        )
+      end)
+
+      Bypass.expect_once(bypass, "POST", "/mpesa/b2b/v1/paymentrequest", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        decoded = Jason.decode!(body)
+
+        assert decoded["CommandID"] == "BusinessPayBill"
+        assert decoded["PartyA"] == "174379"
+        assert decoded["PartyB"] == "600001"
+        assert decoded["AccountReference"] == "INV-001"
+        assert is_binary(decoded["SecurityCredential"]) and decoded["SecurityCredential"] != ""
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{
+            "OriginatorConversationID" => "29112-34801843-1",
+            "ConversationID" => "AG_20191219_00005797af5d7d75f652",
+            "ResponseCode" => "0",
+            "ResponseDescription" => "Accept the service request successfully."
+          })
+        )
+      end)
+
+      params = %{amount: 1000, party_b: "600001", account_reference: "INV-001", remarks: "Supplier payment"}
+
+      assert {:ok, %Response{status: :pending, gateway: :mpesa} = resp} =
+               Mpesa.business_payment(params)
+
+      assert resp.transaction_id == "AG_20191219_00005797af5d7d75f652"
+    end
   end
 
   describe "transaction_status/1" do
@@ -272,12 +433,92 @@ defmodule ZebraPay.Gateways.MpesaTest do
       assert {:error, %Response{status: :error, gateway: :mpesa}} =
                Mpesa.transaction_status(%{})
     end
+
+    test "resolves base_url, fetches a token, RSA-encrypts the SecurityCredential, and returns pending on success",
+         %{bypass: bypass} do
+      Bypass.expect_once(bypass, "GET", "/oauth/v1/generate", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{"access_token" => "test_token", "expires_in" => "3599"})
+        )
+      end)
+
+      Bypass.expect_once(bypass, "POST", "/mpesa/transactionstatus/v1/query", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        decoded = Jason.decode!(body)
+
+        assert decoded["CommandID"] == "TransactionStatusQuery"
+        assert decoded["TransactionID"] == "OEI2AK4Q16"
+        assert decoded["PartyA"] == "174379"
+        assert is_binary(decoded["SecurityCredential"]) and decoded["SecurityCredential"] != ""
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{
+            "OriginatorConversationID" => "29112-34801843-1",
+            "ConversationID" => "AG_20191219_00005797af5d7d75f652",
+            "ResponseCode" => "0",
+            "ResponseDescription" => "Accept the service request successfully."
+          })
+        )
+      end)
+
+      params = %{transaction_id: "OEI2AK4Q16"}
+
+      assert {:ok, %Response{status: :pending, gateway: :mpesa} = resp} =
+               Mpesa.transaction_status(params)
+
+      assert resp.transaction_id == "AG_20191219_00005797af5d7d75f652"
+    end
   end
 
   describe "reverse/1" do
     test "returns error when required params are missing" do
       assert {:error, %Response{status: :error, gateway: :mpesa}} =
                Mpesa.reverse(%{transaction_id: "NLJ7RT61SV"})
+    end
+
+    test "resolves base_url, fetches a token, RSA-encrypts the SecurityCredential, and returns pending on success",
+         %{bypass: bypass} do
+      Bypass.expect_once(bypass, "GET", "/oauth/v1/generate", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{"access_token" => "test_token", "expires_in" => "3599"})
+        )
+      end)
+
+      Bypass.expect_once(bypass, "POST", "/mpesa/reversal/v1/request", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        decoded = Jason.decode!(body)
+
+        assert decoded["CommandID"] == "TransactionReversal"
+        assert decoded["TransactionID"] == "OEI2AK4Q16"
+        assert decoded["Amount"] == 100
+        assert is_binary(decoded["SecurityCredential"]) and decoded["SecurityCredential"] != ""
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{
+            "OriginatorConversationID" => "29112-34801843-1",
+            "ConversationID" => "AG_20191219_00005797af5d7d75f652",
+            "ResponseCode" => "0",
+            "ResponseDescription" => "Accept the service request successfully."
+          })
+        )
+      end)
+
+      params = %{transaction_id: "OEI2AK4Q16", amount: 100, remarks: "Wrong recipient"}
+
+      assert {:ok, %Response{status: :pending, gateway: :mpesa} = resp} = Mpesa.reverse(params)
+      assert resp.transaction_id == "AG_20191219_00005797af5d7d75f652"
     end
   end
 

@@ -360,8 +360,8 @@ end
 - [x] OAuth token caching
 - [x] Phoenix/Plug webhook handler
 - [x] Sandbox/production toggling
-- [ ] Wire `TokenCache` into M-Pesa's auth calls
-- [ ] Bypass-based integration tests for every M-Pesa endpoint
+- [x] Wire `TokenCache` into M-Pesa's auth calls
+- [x] Bypass-based integration tests for every M-Pesa endpoint
 
 ### v0.2 — Coming soon Kenyan gateways (one at a time)
 

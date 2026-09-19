@@ -22,7 +22,7 @@ ZebraPay provides a **single, consistent API** for integrating multiple payment 
 | Airtel Money            | Mobile Money   | —        | —   | —   | —   | —                  | —        | —       | —     | 🚧 Coming soon |
 | Pesapal                 | Multi-channel  | —        | —   | —   | —   | —                  | —        | —       | —     | 🚧 Coming soon |
 
-M-Pesa is being built out fully first. The other Kenyan gateways will be re-added one at a time once M-Pesa is solid.
+M-Pesa is being built out fully first. The other Kenyan gateways will be added one at a time once M-Pesa is solid.
 
 ### Phase 2 — Pan-African & Global 🌍
 

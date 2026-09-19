@@ -9,8 +9,18 @@ defmodule ZebraPay do
   | M-Pesa (Daraja)| ✅       | ✅  | ✅  | ✅       | ❌    | Stable |
 
   Other gateways (KCB Buni, Equity JengaAPI, Paystack, Airtel Money,
-  Pesapal) are being re-added one at a time in later phases — see
+  Pesapal) are being added one at a time in later phases — see
   `ZEBRAPAY_CONTEXT.md`.
+
+  ## Installation
+
+  Add to your `mix.exs`:
+
+      def deps do
+        [
+          {:zebrapay, "~> 0.1.0"}
+        ]
+      end
 
   ## Quick Start
 
@@ -32,14 +42,22 @@ defmodule ZebraPay do
         sandbox: true  # set false in prod
 
       config :zebrapay, :mpesa,
+        base_url: [
+          sandbox: "https://sandbox.safaricom.co.ke",
+          production: "https://api.safaricom.co.ke"
+        ],
         consumer_key: System.get_env("MPESA_CONSUMER_KEY"),
         consumer_secret: System.get_env("MPESA_CONSUMER_SECRET"),
         shortcode: System.get_env("MPESA_SHORTCODE"),
         passkey: System.get_env("MPESA_PASSKEY"),
         callback_url: System.get_env("MPESA_CALLBACK_URL")
 
+  `base_url` is required — there's no hardcoded fallback, so a missing
+  entry for the active environment (`sandbox` or `production`) surfaces
+  as a clear `{:error, %ZebraPay.Response{}}` instead of a network error.
+
   See `ZebraPay.Gateways.Mpesa` for full configuration options, including
-  B2B, Transaction Status, and Reversal support.
+  B2C, B2B, Transaction Status, Reversal, and Account Balance support.
   """
 
   alias ZebraPay.{Config, Response}

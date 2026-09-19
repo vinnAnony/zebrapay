@@ -2,10 +2,6 @@ defmodule ZebraPay.Gateways.Mpesa do
   @moduledoc """
   M-Pesa (Safaricom Daraja 3.0) gateway for ZebraPay.
 
-  This is currently the only gateway implemented in ZebraPay. Other
-  gateways (KCB Buni, Equity JengaAPI, Paystack, Airtel Money, Pesapal)
-  will be re-added one at a time in later phases.
-
   Supports the major Daraja endpoints:
 
   - STK Push (Lipa na M-Pesa Online) — C2B — `initiate_payment/1`

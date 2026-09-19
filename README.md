@@ -238,7 +238,7 @@ defmodule MyApp.MpesaHandler do
 end
 ```
 
-`ZebraPay.Gateways.Mpesa.verify_webhook/2` handles all four M-Pesa
+`verify_webhook/2` (invoked internally by `ZebraPay.WebhookPlug`) handles all four M-Pesa
 callback shapes: the STK Push callback, the shared "Result" callback
 used by B2C, B2B, Transaction Status, Reversal, and Account Balance,
 and the flat C2B Confirmation payload.
@@ -402,4 +402,4 @@ PRs welcome! Please:
 
 ## License
 
-MIT © 2025 ZebraPay Contributors
+MIT © ZebraPay Contributors

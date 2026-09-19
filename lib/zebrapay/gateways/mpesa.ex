@@ -658,7 +658,9 @@ defmodule ZebraPay.Gateways.Mpesa do
   # each host app must configure its own `production_cert_path`.
   defp cert_path do
     if Config.sandbox?() do
-      path = config(:sandbox_cert_path, Application.app_dir(:zebrapay, "priv/certs/mpesa_sandbox.cer"))
+      path =
+        config(:sandbox_cert_path, Application.app_dir(:zebrapay, "priv/certs/mpesa_sandbox.cer"))
+
       {:ok, Path.expand(path)}
     else
       case config(:production_cert_path) do
@@ -709,8 +711,7 @@ defmodule ZebraPay.Gateways.Mpesa do
   end
 
   defp parse_query_response(%{"ResultCode" => code} = raw, _id) when code != "0" do
-    {:ok,
-     Response.failed(:mpesa, raw["ResultDesc"] || "Payment failed", %{raw: raw})}
+    {:ok, Response.failed(:mpesa, raw["ResultDesc"] || "Payment failed", %{raw: raw})}
   end
 
   defp parse_query_response(raw, _id) do

@@ -60,7 +60,11 @@ defmodule ZebraPay.WebhookPlug do
     case ZebraPay.verify_webhook(gateway, payload, headers) do
       {:ok, event} ->
         if handler, do: handler.handle_event(event)
-        Logger.info("[ZebraPay.Webhook] #{gateway} event received: #{inspect(event.status || :unknown)}")
+
+        Logger.info(
+          "[ZebraPay.Webhook] #{gateway} event received: #{inspect(event.status || :unknown)}"
+        )
+
         send_resp(conn, 200, "OK")
 
       {:error, reason} ->

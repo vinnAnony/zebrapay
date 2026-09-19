@@ -35,7 +35,8 @@ defmodule ZebraPay.Gateways.MpesaTest do
       b2b_result_url: "http://localhost/callbacks/mpesa/b2b/result",
       b2b_timeout_url: "http://localhost/callbacks/mpesa/b2b/timeout",
       transaction_status_result_url: "http://localhost/callbacks/mpesa/transaction_status/result",
-      transaction_status_timeout_url: "http://localhost/callbacks/mpesa/transaction_status/timeout",
+      transaction_status_timeout_url:
+        "http://localhost/callbacks/mpesa/transaction_status/timeout",
       reversal_result_url: "http://localhost/callbacks/mpesa/reversal/result",
       reversal_timeout_url: "http://localhost/callbacks/mpesa/reversal/timeout",
       account_balance_result_url: "http://localhost/callbacks/mpesa/account_balance/result",
@@ -419,7 +420,12 @@ defmodule ZebraPay.Gateways.MpesaTest do
         )
       end)
 
-      params = %{amount: 1000, party_b: "600001", account_reference: "INV-001", remarks: "Supplier payment"}
+      params = %{
+        amount: 1000,
+        party_b: "600001",
+        account_reference: "INV-001",
+        remarks: "Supplier payment"
+      }
 
       assert {:ok, %Response{status: :pending, gateway: :mpesa} = resp} =
                Mpesa.business_payment(params)
@@ -592,7 +598,9 @@ defmodule ZebraPay.Gateways.MpesaTest do
       mpesa_config = Application.get_env(:zebrapay, :mpesa)
       # Route "production" at Bypass too, so this test never touches the
       # real Safaricom API while exercising the sandbox: false branch.
-      base_urls = Keyword.put(mpesa_config[:base_url], :production, "http://localhost:#{bypass.port}")
+      base_urls =
+        Keyword.put(mpesa_config[:base_url], :production, "http://localhost:#{bypass.port}")
+
       Application.put_env(:zebrapay, :mpesa, Keyword.put(mpesa_config, :base_url, base_urls))
 
       Bypass.expect_once(bypass, "GET", "/oauth/v1/generate", fn conn ->

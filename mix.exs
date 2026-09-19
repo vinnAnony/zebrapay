@@ -53,8 +53,8 @@ defmodule ZebraPay.MixProject do
       # Testing
       {:ex_machina, "~> 2.7", only: :test},
       {:bypass, "~> 2.1", only: :test},
-      {:cowlib, "~> 2.13.0", override: true},
-      {:cowboy, "~> 2.10.0", override: true},
+      {:cowlib, "~> 2.13.0", override: true, only: :test},
+      {:cowboy, "~> 2.10.0", override: true, only: :test},
       {:mox, "~> 1.1", only: :test},
       {:excoveralls, "~> 0.18", only: :test},
 
@@ -96,7 +96,7 @@ defmodule ZebraPay.MixProject do
       main: "ZebraPay",
       source_url: @source_url,
       source_ref: "v#{@version}",
-      extras: ["README.md", "CHANGELOG.md"],
+      extras: ["README.md", "CHANGELOG.md", "LICENSE"],
       groups_for_modules: [
         Core: [ZebraPay, ZebraPay.Config, ZebraPay.Response],
         Gateways: [

@@ -7,7 +7,7 @@ defmodule ZebraPay.Application do
   def start(_type, _args) do
     children = [
       # Token cache: stores OAuth tokens with TTL to avoid re-fetching on every request
-      {ZebraPay.TokenCache, []},
+      {ZebraPay.TokenCache, []}
 
       # Optional: rate limiter (prep for production hardening)
       # {ZebraPay.RateLimiter, []}

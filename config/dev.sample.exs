@@ -20,25 +20,78 @@ config :zebrapay, :mpesa,
   consumer_key: System.get_env("MPESA_CONSUMER_KEY", "your_sandbox_consumer_key"),
   consumer_secret: System.get_env("MPESA_CONSUMER_SECRET", "your_sandbox_consumer_secret"),
   shortcode: System.get_env("MPESA_SHORTCODE", "174379"),
-  passkey: System.get_env("MPESA_PASSKEY", "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919"),
-  callback_url: System.get_env("MPESA_CALLBACK_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa"),
+  passkey:
+    System.get_env(
+      "MPESA_PASSKEY",
+      "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919"
+    ),
+  callback_url:
+    System.get_env("MPESA_CALLBACK_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa"),
   # Each async operation gets its own result/timeout URL pair, so you can
   # route each one to a distinct handler instead of inspecting the
   # callback payload to figure out which operation it belongs to.
-  b2c_result_url: System.get_env("MPESA_B2C_RESULT_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/b2c/result"),
-  b2c_timeout_url: System.get_env("MPESA_B2C_TIMEOUT_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/b2c/timeout"),
-  b2b_result_url: System.get_env("MPESA_B2B_RESULT_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/b2b/result"),
-  b2b_timeout_url: System.get_env("MPESA_B2B_TIMEOUT_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/b2b/timeout"),
-  transaction_status_result_url: System.get_env("MPESA_TRANSACTION_STATUS_RESULT_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/transaction_status/result"),
-  transaction_status_timeout_url: System.get_env("MPESA_TRANSACTION_STATUS_TIMEOUT_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/transaction_status/timeout"),
-  reversal_result_url: System.get_env("MPESA_REVERSAL_RESULT_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/reversal/result"),
-  reversal_timeout_url: System.get_env("MPESA_REVERSAL_TIMEOUT_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/reversal/timeout"),
-  account_balance_result_url: System.get_env("MPESA_ACCOUNT_BALANCE_RESULT_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/account_balance/result"),
-  account_balance_timeout_url: System.get_env("MPESA_ACCOUNT_BALANCE_TIMEOUT_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/account_balance/timeout"),
+  b2c_result_url:
+    System.get_env(
+      "MPESA_B2C_RESULT_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/b2c/result"
+    ),
+  b2c_timeout_url:
+    System.get_env(
+      "MPESA_B2C_TIMEOUT_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/b2c/timeout"
+    ),
+  b2b_result_url:
+    System.get_env(
+      "MPESA_B2B_RESULT_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/b2b/result"
+    ),
+  b2b_timeout_url:
+    System.get_env(
+      "MPESA_B2B_TIMEOUT_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/b2b/timeout"
+    ),
+  transaction_status_result_url:
+    System.get_env(
+      "MPESA_TRANSACTION_STATUS_RESULT_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/transaction_status/result"
+    ),
+  transaction_status_timeout_url:
+    System.get_env(
+      "MPESA_TRANSACTION_STATUS_TIMEOUT_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/transaction_status/timeout"
+    ),
+  reversal_result_url:
+    System.get_env(
+      "MPESA_REVERSAL_RESULT_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/reversal/result"
+    ),
+  reversal_timeout_url:
+    System.get_env(
+      "MPESA_REVERSAL_TIMEOUT_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/reversal/timeout"
+    ),
+  account_balance_result_url:
+    System.get_env(
+      "MPESA_ACCOUNT_BALANCE_RESULT_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/account_balance/result"
+    ),
+  account_balance_timeout_url:
+    System.get_env(
+      "MPESA_ACCOUNT_BALANCE_TIMEOUT_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/account_balance/timeout"
+    ),
   # C2B (see ZebraPay.Gateways.Mpesa.register_c2b_urls/1). ValidationURL
   # is only called if Safaricom has enabled validation for your shortcode.
-  c2b_validation_url: System.get_env("MPESA_C2B_VALIDATION_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/c2b/validation"),
-  c2b_confirmation_url: System.get_env("MPESA_C2B_CONFIRMATION_URL", "https://your-ngrok.ngrok.io/webhooks/mpesa/c2b/confirmation"),
+  c2b_validation_url:
+    System.get_env(
+      "MPESA_C2B_VALIDATION_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/c2b/validation"
+    ),
+  c2b_confirmation_url:
+    System.get_env(
+      "MPESA_C2B_CONFIRMATION_URL",
+      "https://your-ngrok.ngrok.io/webhooks/mpesa/c2b/confirmation"
+    ),
   initiator_name: System.get_env("MPESA_INITIATOR_NAME", "testapi"),
   initiator_password: System.get_env("MPESA_INITIATOR_PASSWORD", "Safaricom999!"),
   # Needed for B2C/B2B/Transaction Status/Reversal/Account Balance — see

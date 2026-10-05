@@ -74,6 +74,43 @@ defmodule ZebraPay.Config do
   @spec sandbox?() :: boolean()
   def sandbox?, do: get(:sandbox, true)
 
+  @doc """
+  Like `sandbox?/0`, but a boolean `:sandbox` in the call's
+  `config: [...]` option wins over the global flag.
+  """
+  @spec sandbox?(keyword()) :: boolean()
+  def sandbox?(opts) when is_list(opts) do
+    case fetch_override(opts, :sandbox) do
+      {:ok, value} when is_boolean(value) -> value
+      _ -> sandbox?()
+    end
+  end
+
+  @doc """
+  Resolves one gateway config value for a single call.
+
+  Looks in the call's `config: [...]` option first (a keyword list or a
+  map), then in the gateway's application config, then returns `default`.
+  A nil override counts as absent.
+
+      iex> ZebraPay.Config.resolve(:mpesa, [config: [shortcode: "600123"]], :shortcode)
+      "600123"
+  """
+  @spec resolve(atom(), keyword(), atom(), any()) :: any()
+  def resolve(gateway, opts, key, default \\ nil) do
+    case fetch_override(opts, key) do
+      {:ok, value} when not is_nil(value) -> value
+      _ -> get([gateway, key], default)
+    end
+  end
+
+  defp fetch_override(opts, key) do
+    case Keyword.get(opts, :config, []) do
+      overrides when is_map(overrides) -> Map.fetch(overrides, key)
+      overrides when is_list(overrides) -> Keyword.fetch(overrides, key)
+    end
+  end
+
   @doc "Returns all config for a specific gateway."
   @spec gateway_config(atom()) :: keyword()
   def gateway_config(gateway) do

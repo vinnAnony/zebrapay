@@ -58,6 +58,15 @@ defmodule ZebraPay do
 
   See `ZebraPay.Gateways.Mpesa` for full configuration options, including
   B2C, B2B, Transaction Status, Reversal, and Account Balance support.
+
+  ## Multiple merchants
+
+  Every call takes a trailing `config: [...]` option that overrides the
+  application config for that call, so one VM can serve many merchants:
+
+      ZebraPay.initiate_payment(:mpesa, params, config: merchant_config)
+
+  See "Multiple merchants" in `ZebraPay.Gateways.Mpesa`.
   """
 
   alias ZebraPay.{Config, Response}
@@ -79,11 +88,11 @@ defmodule ZebraPay do
       iex> ZebraPay.initiate_payment(:mpesa, %{phone: "254712345678", amount: 100, reference: "REF-001", description: "Test"})
       {:ok, %ZebraPay.Response{status: :pending, gateway: :mpesa, ...}}
   """
-  @spec initiate_payment(gateway(), payment_params()) :: result()
-  def initiate_payment(gateway, params) when is_atom(gateway) do
+  @spec initiate_payment(gateway(), payment_params(), keyword()) :: result()
+  def initiate_payment(gateway, params, opts \\ []) when is_atom(gateway) do
     with {:ok, mod} <- resolve_gateway(gateway),
          :ok <- mod.validate(params) do
-      mod.initiate_payment(params)
+      mod.initiate_payment(params, opts)
     end
   end
 
@@ -95,20 +104,20 @@ defmodule ZebraPay do
       iex> ZebraPay.query_status(:mpesa, "ws_CO_010320202011179845")
       {:ok, %ZebraPay.Response{status: :success, ...}}
   """
-  @spec query_status(gateway(), String.t()) :: result()
-  def query_status(gateway, transaction_id) do
+  @spec query_status(gateway(), String.t(), keyword()) :: result()
+  def query_status(gateway, transaction_id, opts \\ []) do
     with {:ok, mod} <- resolve_gateway(gateway) do
-      mod.query_status(transaction_id)
+      mod.query_status(transaction_id, opts)
     end
   end
 
   @doc """
   Initiates a B2C (business to customer) payout.
   """
-  @spec payout(gateway(), payment_params()) :: result()
-  def payout(gateway, params) do
+  @spec payout(gateway(), payment_params(), keyword()) :: result()
+  def payout(gateway, params, opts \\ []) do
     with {:ok, mod} <- resolve_gateway(gateway) do
-      mod.payout(params)
+      mod.payout(params, opts)
     end
   end
 

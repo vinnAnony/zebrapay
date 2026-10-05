@@ -23,7 +23,9 @@ defmodule ZebraPay.TokenCache do
   In-memory token cache using ETS.
 
   Avoids fetching a new OAuth token on every API call by caching
-  tokens until they expire. Each gateway has its own cache slot.
+  tokens until they expire. A slot is keyed by whatever the gateway
+  passes — M-Pesa uses `{:mpesa, environment, consumer_key}`, so each
+  merchant's credentials get their own token.
 
   ## Usage
 
@@ -45,7 +47,7 @@ defmodule ZebraPay.TokenCache do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
-  @spec get(atom()) :: {:ok, String.t()} | :miss
+  @spec get(term()) :: {:ok, String.t()} | :miss
   def get(gateway) do
     now = System.system_time(:second)
 
@@ -58,7 +60,7 @@ defmodule ZebraPay.TokenCache do
     end
   end
 
-  @spec put(atom(), String.t(), keyword()) :: :ok
+  @spec put(term(), String.t(), keyword()) :: :ok
   def put(gateway, token, opts \\ []) do
     expires_in = Keyword.get(opts, :expires_in, 3600)
     expires_at = System.system_time(:second) + expires_in - @clock_skew_seconds
@@ -66,9 +68,19 @@ defmodule ZebraPay.TokenCache do
     :ok
   end
 
-  @spec clear(atom()) :: :ok
-  def clear(gateway) do
+  @doc """
+  Drops a cached token. Given a gateway atom, drops every token cached
+  for that gateway, whichever credentials it belongs to.
+  """
+  @spec clear(term()) :: :ok
+  def clear(gateway) when is_atom(gateway) do
     :ets.delete(@table, gateway)
+    :ets.match_delete(@table, {{gateway, :_, :_}, :_, :_})
+    :ok
+  end
+
+  def clear(key) do
+    :ets.delete(@table, key)
     :ok
   end
 

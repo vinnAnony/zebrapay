@@ -208,6 +208,46 @@ below.
 
 ---
 
+## Multiple merchants
+
+The configuration above describes one merchant. To serve several
+shortcodes from one app — a platform where each customer brings their own
+paybill — pass that merchant's settings as `config:`, the last argument of
+every call:
+
+```elixir
+merchant = [
+  sandbox: false,
+  consumer_key: "...",
+  consumer_secret: "...",
+  shortcode: "600123",
+  passkey: "...",
+  initiator_name: "...",
+  initiator_password: "..."
+]
+
+ZebraPay.Gateways.Mpesa.initiate_payment(
+  %{
+    phone: "254712345678",
+    amount: 100,
+    reference: "INV-1",
+    description: "Rent",
+    callback_url: "https://myapp.com/callbacks/daraja/abc123/stk"
+  },
+  config: merchant
+)
+```
+
+Each key given overrides the application config for that call; a key left
+out falls back to it. Keep what every merchant shares (`base_url`,
+certificate paths) in application config and leave credentials out, so a
+merchant with a missing credential can't silently use a global one.
+
+OAuth tokens are cached per consumer key and environment. Async calls
+(B2C, B2B, Transaction Status, Reversal, Account Balance) also accept
+`:result_url` and `:timeout_url` in their params, so each merchant's
+callbacks can go to its own URL.
+
 ## Webhook Handling (Phoenix)
 
 ```elixir

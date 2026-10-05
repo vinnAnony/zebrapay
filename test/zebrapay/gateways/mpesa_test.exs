@@ -1,7 +1,8 @@
 defmodule ZebraPay.Gateways.MpesaTest do
-  # ZebraPay.TokenCache is a single global ETS table keyed by gateway name,
-  # so it can't safely be shared across concurrently-running tests: async
-  # tests would race to cache/clear the same :mpesa token, causing
+  # ZebraPay.TokenCache is a single global ETS table, and these tests all
+  # use the same consumer key, so it can't safely be shared across
+  # concurrently-running tests: async tests would race to cache/clear the
+  # same :mpesa token, causing
   # Bypass's oauth expectation to go unmet in whichever test loses the race.
   use ExUnit.Case, async: false
 
@@ -707,6 +708,177 @@ defmodule ZebraPay.Gateways.MpesaTest do
                "ResultCode" => "C2B00012",
                "ResultDesc" => "Invalid account number"
              }
+    end
+  end
+
+  describe "per-call config (multiple merchants)" do
+    defp token_response(conn, token) do
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.resp(200, Jason.encode!(%{"access_token" => token, "expires_in" => "3599"}))
+    end
+
+    defp basic_auth(conn) do
+      ["Basic " <> encoded] = Plug.Conn.get_req_header(conn, "authorization")
+      Base.decode64!(encoded)
+    end
+
+    defp stk_ok(conn) do
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.resp(
+        200,
+        Jason.encode!(%{
+          "MerchantRequestID" => "29115-34620561-1",
+          "CheckoutRequestID" => "ws_CO_191220191020363925",
+          "ResponseCode" => "0",
+          "CustomerMessage" => "Success. Request accepted for processing"
+        })
+      )
+    end
+
+    @stk_params %{phone: "0712345678", amount: 100, reference: "INV-1", description: "Rent"}
+
+    test "uses the merchant's credentials, shortcode and callback URL instead of app config",
+         %{bypass: bypass} do
+      Bypass.expect_once(bypass, "GET", "/oauth/v1/generate", fn conn ->
+        assert basic_auth(conn) == "merchant_a_key:merchant_a_secret"
+        token_response(conn, "token_a")
+      end)
+
+      Bypass.expect_once(bypass, "POST", "/mpesa/stkpush/v1/processrequest", fn conn ->
+        assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer token_a"]
+
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        decoded = Jason.decode!(body)
+
+        assert decoded["BusinessShortCode"] == "600111"
+        assert decoded["PartyB"] == "600111"
+        assert decoded["CallBackURL"] == "http://localhost/callbacks/daraja/a/stk"
+
+        assert Base.decode64!(decoded["Password"]) ==
+                 "600111" <> "passkey_a" <> decoded["Timestamp"]
+
+        stk_ok(conn)
+      end)
+
+      merchant = [
+        consumer_key: "merchant_a_key",
+        consumer_secret: "merchant_a_secret",
+        shortcode: "600111",
+        passkey: "passkey_a",
+        callback_url: "http://localhost/callbacks/daraja/a/stk"
+      ]
+
+      assert {:ok, %Response{status: :pending}} =
+               Mpesa.initiate_payment(@stk_params, config: merchant)
+    end
+
+    test "accepts the config as a map and through the ZebraPay facade", %{bypass: bypass} do
+      Bypass.expect_once(bypass, "GET", "/oauth/v1/generate", fn conn ->
+        assert basic_auth(conn) == "map_key:map_secret"
+        token_response(conn, "token_map")
+      end)
+
+      Bypass.expect_once(bypass, "POST", "/mpesa/stkpush/v1/processrequest", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert Jason.decode!(body)["BusinessShortCode"] == "600333"
+        stk_ok(conn)
+      end)
+
+      merchant = %{consumer_key: "map_key", consumer_secret: "map_secret", shortcode: "600333"}
+
+      assert {:ok, %Response{status: :pending}} =
+               ZebraPay.initiate_payment(:mpesa, @stk_params, config: merchant)
+    end
+
+    test "caches one token per merchant, so merchants never share a token", %{bypass: bypass} do
+      test_pid = self()
+
+      Bypass.expect(bypass, "GET", "/oauth/v1/generate", fn conn ->
+        [key, _secret] = conn |> basic_auth() |> String.split(":")
+        send(test_pid, {:token_fetched, key})
+        token_response(conn, "token_for_" <> key)
+      end)
+
+      Bypass.expect(bypass, "POST", "/mpesa/stkpush/v1/processrequest", fn conn ->
+        ["Bearer " <> token] = Plug.Conn.get_req_header(conn, "authorization")
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        send(test_pid, {:pushed, Jason.decode!(body)["BusinessShortCode"], token})
+        stk_ok(conn)
+      end)
+
+      a = [consumer_key: "key_a", consumer_secret: "s", shortcode: "600111"]
+      b = [consumer_key: "key_b", consumer_secret: "s", shortcode: "600222"]
+
+      assert {:ok, _} = Mpesa.initiate_payment(@stk_params, config: a)
+      assert {:ok, _} = Mpesa.initiate_payment(@stk_params, config: b)
+      assert {:ok, _} = Mpesa.initiate_payment(@stk_params, config: a)
+
+      assert_received {:pushed, "600111", "token_for_key_a"}
+      assert_received {:pushed, "600222", "token_for_key_b"}
+      assert_received {:pushed, "600111", "token_for_key_a"}
+
+      # The third call reused merchant A's cached token
+      assert_received {:token_fetched, "key_a"}
+      assert_received {:token_fetched, "key_b"}
+      refute_received {:token_fetched, _}
+    end
+
+    test "sandbox: false in the call's config selects the production base URL and cert",
+         %{bypass: bypass} do
+      Application.put_env(
+        :zebrapay,
+        :mpesa,
+        Keyword.put(Application.get_env(:zebrapay, :mpesa), :base_url,
+          sandbox: "http://localhost:1",
+          production: "http://localhost:#{bypass.port}"
+        )
+      )
+
+      Bypass.expect_once(bypass, "GET", "/oauth/v1/generate", &token_response(&1, "prod_token"))
+
+      Bypass.expect_once(bypass, "POST", "/mpesa/reversal/v1/request", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        decoded = Jason.decode!(body)
+
+        assert decoded["Initiator"] == "merchant_initiator"
+        assert decoded["ReceiverParty"] == "600111"
+        assert decoded["ResultURL"] == "http://localhost/callbacks/daraja/a/reversal/result"
+
+        assert decoded["QueueTimeOutURL"] ==
+                 "http://localhost/callbacks/daraja/a/reversal/timeout"
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{
+            "OriginatorConversationID" => "29112-34801843-1",
+            "ConversationID" => "AG_20191219_00005797af5d7d75f652",
+            "ResponseCode" => "0"
+          })
+        )
+      end)
+
+      merchant = [
+        sandbox: false,
+        consumer_key: "prod_key",
+        consumer_secret: "prod_secret",
+        shortcode: "600111",
+        initiator_name: "merchant_initiator",
+        initiator_password: "secret",
+        production_cert_path: "test/support/fixtures/test_cert.pem"
+      ]
+
+      params = %{
+        transaction_id: "OEI2AK4Q16",
+        amount: 100,
+        result_url: "http://localhost/callbacks/daraja/a/reversal/result",
+        timeout_url: "http://localhost/callbacks/daraja/a/reversal/timeout"
+      }
+
+      assert {:ok, %Response{status: :pending}} = Mpesa.reverse(params, config: merchant)
     end
   end
 end
